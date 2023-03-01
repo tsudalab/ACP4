@@ -7,7 +7,7 @@
 ;   (libraries batteries dolog minicli parany vector3 line_oriented cpm bst))
 
 (executables
-  (names acp4 scissors MST)
-  (public_names acp4 acp4_scissors acp4_mst)
-  (modules ph4 acp4 gnuplot common sdf_3D scissors MST)
+  (names acp4 scissors MST kmeans)
+  (public_names acp4 acp4_scissors acp4_mst acp4_kmeans)
+  (modules ph4 acp4 gnuplot common sdf_3D scissors MST kmeans)
   (libraries batteries dolog minicli parany vector3 line_oriented cpm bst ocamlgraph molenc))

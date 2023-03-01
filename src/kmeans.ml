@@ -49,12 +49,10 @@ let extract_clusters assignment =
     ) assignment;
   L.map snd (Ht.bindings cid2cluster)
 
-let compute_center add div all_elements cluster_members =
+let compute_center max_dim all_elements cluster_members =
   let members = IntSet.to_array cluster_members in
-  let n = A.length members in
   let element_members = A.map (fun i -> all_elements.(i)) members in
-  let sum = A.reduce add element_members in
-  div sum n
+  Common.average_many max_dim element_members
 
 let cluster_variance dist all_elements cluster =
   let n = IntSet.cardinal cluster.members in
@@ -80,7 +78,7 @@ let euclid xs ys =
 (*      cid, members, variance, silhouette *)
 
 (* the k-means implementation *)
-let cluster rng add div dist k elements =
+let cluster max_dim rng dist k elements =
   (* random initial cluster centers *)
   let init_centers = rand_choose rng k elements in
   (* compute initial assignment *)
@@ -88,7 +86,7 @@ let cluster rng add div dist k elements =
     let assignment = A.map (assign_to_cluster dist init_centers) elements in
     extract_clusters assignment in
   (* compute centers *)
-  let centers = L.map (compute_center add div elements) clusters in
+  let centers = L.map (compute_center max_dim elements) clusters in
   let cluster_w_centers =
     L.map2 (fun members center -> { members; center }) clusters centers in
   let variances = L.map (cluster_variance dist elements) cluster_w_centers in
@@ -104,7 +102,7 @@ let cluster rng add div dist k elements =
         extract_clusters assignment in
       (* update centers *)
       let clusts' =
-        let new_centers = L.map (compute_center add div elements) clusters' in
+        let new_centers = L.map (compute_center max_dim elements) clusters' in
         L.map2 (fun members center -> { members; center }) clusters' new_centers in
       let vars' = L.map (cluster_variance dist elements) clusts' in
       let delta = euclid vars vars' in

@@ -120,6 +120,35 @@ let float32_array_of_list (l: float list): float32_array =
     ) l;
   arr
 
+(* compute the average of an array of fps *)
+let average_many max_dim fp_arr =
+  let sum = A.create max_dim 0.0 in
+  let num_fps = float (A.length fp_arr) in
+  A.iter (fun fp ->
+      let n = BA1.dim fp.indexes in
+      assert(n = BA1.dim fp.values);
+      for i = 0 to n - 1 do
+        let j = Int32.to_int (BA1.unsafe_get fp.indexes i) in
+        let x = BA1.unsafe_get fp.values i in
+        sum.(j) <- sum.(j) +. x
+      done
+    ) fp_arr;
+  (* average *)  
+  let idxs = ref [] in
+  let avg_vals = ref [] in
+  for i = 0 to max_dim - 1 do
+    (* prepare for sparse vector *)
+    if sum.(i) > 0.0 then
+      begin
+        let avg = sum.(i) /. num_fps in
+        idxs := i :: !idxs;
+        avg_vals := avg :: !avg_vals
+      end
+  done;
+  (* convert back to sparse_float_fp *)
+  ("avg", { indexes = int32_array_of_list   (L.rev !idxs) ;
+            values  = float32_array_of_list (L.rev !avg_vals) })
+
 (* transform the array of (float IntMap.t) into something more efficient
    to compute Tanimoto *)
 let freeze nb_dx (name, encoded): (string * sparse_float_fp) =

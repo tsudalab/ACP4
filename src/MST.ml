@@ -117,7 +117,7 @@ let tanimoto_mean_std n a =
         let j = Random.State.int rng len in
         Common.tanimoto' a.(i) a.(j)
       ) in
-  Common.(average arr, stddev arr)
+  (A.favg arr, Common.stddev arr)
 
 let main () =
   Log.(set_log_level INFO);

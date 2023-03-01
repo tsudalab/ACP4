@@ -146,8 +146,8 @@ let average_many max_dim fp_arr =
       end
   done;
   (* convert back to sparse_float_fp *)
-  ("avg", { indexes = int32_array_of_list   (L.rev !idxs) ;
-            values  = float32_array_of_list (L.rev !avg_vals) })
+  { indexes = int32_array_of_list   (L.rev !idxs) ;
+    values  = float32_array_of_list (L.rev !avg_vals) }
 
 (* transform the array of (float IntMap.t) into something more efficient
    to compute Tanimoto *)
@@ -251,9 +251,6 @@ module BS_defaults = struct
   let radial_cutoff = 40.0
   let dx = 0.9
 end
-
-let average (a: float array): float =
-  (A.fsum a) /. (float (A.length a))
 
 let stddev (a: float array): float =
   let sqr x =

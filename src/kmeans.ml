@@ -18,13 +18,68 @@ module LO = Line_oriented
 module Log = Dolog.Log
 
 type 'a cluster = { members: IntSet.t; (* indexes of all cluster members *)
-                    center: 'a } (* the cluster center (cluster average in k-means) *)
+                    center: 'a } (* the cluster center (average in k-means) *)
 
 (* randomly choose [k] elements from [arr] *)
 let rand_choose rng k arr =
   let shuffled = A.copy arr in
   A.shuffle ~state:rng shuffled;
   A.left shuffled k
+
+(* return cluster id for x (first nearest center's index) *)
+let assign_to_cluster dist centers x =
+  let mini = ref infinity in
+  let j = ref (-1) in
+  let distances = A.map (dist x) centers in
+  A.iteri (fun i d ->
+      if d < !mini then
+        (j := i;
+         mini := d)
+    ) distances;
+  !j
+
+let extract_clusters assignment =
+  let cluster_ids = IntSet.of_array assignment in
+  IntSet.fold (fun id acc ->
+      let cluster =
+        A.fold_lefti (fun acc i id' ->
+            if id = id' then
+              IntSet.add i acc
+            else
+              acc
+          ) IntSet.empty assignment in
+      cluster :: acc
+    ) cluster_ids []
+
+let compute_center add div cluster_members all_elements =
+  let members = IntSet.to_array cluster_members in
+  let n = A.length members in
+  let element_members = A.map (fun i -> all_elements.(i)) members in
+  let sum = A.reduce add element_members in
+  div sum n
+
+let max_iter = 100
+let epsilon = 0.001
+
+let cluster_variance dist cluster all_elements =
+  let n = IntSet.cardinal cluster.members in
+  let sum_d2 =
+    IntSet.fold (fun i acc ->
+        let d = dist cluster.center all_elements.(i) in
+        acc +. (d *. d)
+      ) cluster.members 0.0 in
+  sum_d2 /. (float n)
+
+let cluster rng add div dist k elements =
+  let init_centers = rand_choose rng k elements in
+  let assignment = A.map (assign_to_cluster dist init_centers) elements in
+  let clusters = extract_clusters assignment in
+  let _centers =
+    L.map (fun cluster -> compute_center add div cluster elements) clusters in
+  (* recompute centers *)
+  (* recompute assignment *)
+  (* as long as assignments are changing, refresh them *)
+  failwith "not implemented yet"
 
 let main () =
   Log.(set_log_level INFO);

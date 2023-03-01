@@ -11,7 +11,7 @@ open Printf
 
 module A = BatArray
 module CLI = Minicli.CLI
-module Ht = Hashtbl
+module Ht = BatHashtbl
 module IntSet = BatSet.Int
 module L = BatList
 module LO = Line_oriented
@@ -38,30 +38,25 @@ let assign_to_cluster dist centers x =
     ) distances;
   !j
 
+(* from an assignment (a mapping from elt. index to cluster_id), create
+   a list of clusters *)
 let extract_clusters assignment =
-  let cluster_ids = IntSet.of_array assignment in
-  IntSet.fold (fun id acc ->
-      let cluster =
-        A.fold_lefti (fun acc i id' ->
-            if id = id' then
-              IntSet.add i acc
-            else
-              acc
-          ) IntSet.empty assignment in
-      cluster :: acc
-    ) cluster_ids []
+  let cid2cluster = Ht.create 11 in
+  A.iteri (fun elt_i cid ->
+      let prev = Ht.find_default cid2cluster cid IntSet.empty in
+      let curr = IntSet.add elt_i prev in
+      Ht.replace cid2cluster cid curr
+    ) assignment;
+  L.map snd (Ht.bindings cid2cluster)
 
-let compute_center add div cluster_members all_elements =
+let compute_center add div all_elements cluster_members =
   let members = IntSet.to_array cluster_members in
   let n = A.length members in
   let element_members = A.map (fun i -> all_elements.(i)) members in
   let sum = A.reduce add element_members in
   div sum n
 
-let max_iter = 100
-let epsilon = 0.001
-
-let cluster_variance dist cluster all_elements =
+let cluster_variance dist all_elements cluster =
   let n = IntSet.cardinal cluster.members in
   let sum_d2 =
     IntSet.fold (fun i acc ->
@@ -70,16 +65,58 @@ let cluster_variance dist cluster all_elements =
       ) cluster.members 0.0 in
   sum_d2 /. (float n)
 
+let max_iter = 100
+let epsilon = 0.001
+
+let euclid xs ys =
+  let sum_diff2 =
+    L.fold_left2 (fun acc x y ->
+        let d = x -. y in
+        acc +. (d *. d)
+      ) 0.0 xs ys in
+  sqrt sum_diff2
+
+exception Converged
+
+(* FBR: log out the clusters: *)
+(*      cid, members, variance, silhouette *)
+
+(* the k-means implementation *)
 let cluster rng add div dist k elements =
+  (* random initial cluster centers *)
   let init_centers = rand_choose rng k elements in
-  let assignment = A.map (assign_to_cluster dist init_centers) elements in
-  let clusters = extract_clusters assignment in
-  let _centers =
-    L.map (fun cluster -> compute_center add div cluster elements) clusters in
-  (* recompute centers *)
-  (* recompute assignment *)
-  (* as long as assignments are changing, refresh them *)
-  failwith "not implemented yet"
+  (* compute initial assignment *)
+  let clusters =
+    let assignment = A.map (assign_to_cluster dist init_centers) elements in
+    extract_clusters assignment in
+  (* compute centers *)
+  let centers = L.map (compute_center add div elements) clusters in
+  let cluster_w_centers =
+    L.map2 (fun members center -> { members; center }) clusters centers in
+  let variances = L.map (cluster_variance dist elements) cluster_w_centers in
+  let rec loop iter clusts vars =
+    if iter >= max_iter then
+      (Log.info "Kmeans.cluster: max iter";
+       clusts)
+    else
+      let centers' = A.of_list (L.map (fun clust -> clust.center) clusts) in
+      (* compute assignment *)
+      let clusters' =
+        let assignment = A.map (assign_to_cluster dist centers') elements in
+        extract_clusters assignment in
+      (* update centers *)
+      let clusts' =
+        let new_centers = L.map (compute_center add div elements) clusters' in
+        L.map2 (fun members center -> { members; center }) clusters' new_centers in
+      let vars' = L.map (cluster_variance dist elements) clusts' in
+      let delta = euclid vars vars' in
+      Log.info "Kmeans.cluster: delta = %f" delta;
+      if delta < epsilon then
+        clusts
+      else
+        loop (succ iter) clusts' vars' in
+  (* repeat until max_iter or convergence *)
+  loop 0 cluster_w_centers variances
 
 let main () =
   Log.(set_log_level INFO);

@@ -76,8 +76,6 @@ let euclid xs ys =
       ) 0.0 xs ys in
   sqrt sum_diff2
 
-exception Converged
-
 (* FBR: log out the clusters: *)
 (*      cid, members, variance, silhouette *)
 

@@ -80,26 +80,21 @@ let log_clusters clusts vars =
 let max_iter = 100
 let epsilon = 0.001
 
-let euclid xs ys =
-  let sum_diff2 =
-    L.fold_left2 (fun acc x y ->
-        let d = x -. y in
-        acc +. (d *. d)
-      ) 0.0 xs ys in
-  sqrt sum_diff2
-
-(* FBR: silhouette *)
-(* FBR: write clusters out properly *)
+(* FBR: write clusters out properly: lines of '^mol_name\tcID$' *)
 
 (* the k-means implementation *)
 let cluster max_dim rng dist k elements =
+  let () =
+    let n = A.length elements in
+    if k > n then
+      (Log.fatal "Kmeans.cluster: k=%d > n=%d" k n;
+       exit 1) in
   (* random initial cluster centers *)
   let init_centers = rand_choose rng k elements in
   (* compute initial assignment *)
   let clusters =
     let assignment = A.map (assign_to_cluster dist init_centers) elements in
     extract_clusters assignment in
-  (* compute centers *)
   let cluster_w_centers =
     L.map2 (fun members center -> { members; center })
       clusters (A.to_list init_centers) in
@@ -132,6 +127,41 @@ let cluster max_dim rng dist k elements =
         loop (succ iter) clusts' vars' in
   (* repeat until max_iter or convergence *)
   loop 0 cluster_w_centers vars
+
+(* average distance of elt_i to all _other_ cluster elements *)
+let avg_dist dist all_elements cluster i =
+  let res = ref [] in
+  let elt_i = all_elements.(i) in
+  IntSet.iter (fun j ->
+      if i <> j then
+        let d = dist elt_i all_elements.(j) in
+        res := d :: !res
+    ) cluster.members;
+  L.favg !res
+
+(* the silhouette metric *)
+let silhouette dist clusters all_elements i =
+  let my_cluster', other_clusters =
+    L.partition (fun c -> IntSet.mem i c.members) clusters in
+  assert(L.length my_cluster' = 1);
+  let my_cluster = L.hd my_cluster' in
+  if IntSet.cardinal my_cluster.members = 1 then
+    0.0 (* from the definition *)
+  else
+    (* a: average dist to its own cluster members *)
+    let a = avg_dist dist all_elements my_cluster i in
+    (* b: min(avg dist to other clusters) *)
+    let avg_dists =
+      L.map (fun c ->
+          avg_dist dist all_elements c i
+        ) other_clusters in
+    let b = L.min avg_dists in 
+    (b -. a) /. (max a b)
+
+let avg_silhouette dist clusters all_elements =
+  let n = A.length all_elements in
+  let silhouettes = A.init n (silhouette dist clusters all_elements) in
+  A.favg silhouettes
 
 let find_max_dim mols =
   let high_indexes = A.map Common.high_index mols in
@@ -178,6 +208,8 @@ let main () =
   Log.info "max_dim: %d act_max_dim: %d" max_dim act_max_dim;
   let _nb_mols = A.length all_mols in
   let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
-  log_clusters clusts vars
+  log_clusters clusts vars;
+  let sil = avg_silhouette Common.tani_dist' clusts all_mols in
+  Log.info "avg_sil: %f" sil
 
 let () = main ()

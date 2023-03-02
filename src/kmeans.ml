@@ -123,6 +123,10 @@ let cluster max_dim rng dist k elements =
   (* repeat until max_iter or convergence *)
   loop 0 cluster_w_centers variances
 
+let find_max_dim mols =
+  let high_indexes = A.map Common.high_index mols in
+  1 + (Int32.to_int (A.max high_indexes))
+
 let main () =
   Log.(set_log_level INFO);
   Log.color_on ();
@@ -137,7 +141,8 @@ let main () =
        Sys.argv.(0);
      exit 1);
   let input_fn = CLI.get_string ["-i"] args in
-  let nprocs = CLI.get_int_def ["-np"] args 1 in
+  let _nprocs = CLI.get_int_def ["-np"] args 1 in
+  let k = CLI.get_int ["-k"] args in
   let verbose = CLI.get_set_bool ["-v"] args in
   let binding_site_mode = CLI.get_set_bool ["--BS"] args in
   let cutoff =
@@ -150,19 +155,19 @@ let main () =
       (if binding_site_mode
        then Common.BS_defaults.dx
        else Common.Ligand_defaults.dx) in
+  let rng = match CLI.get_int_opt ["-s"] args with
+    | None -> Random.State.make_self_init ()
+    | Some seed -> Random.State.make [|seed|] in
   CLI.finalize (); (* ------------------------------------------------------ *)
   let nb_dx = 1 + BatFloat.round_to_int (cutoff /. dx) in
+  let max_dim = 1 + (Ph4.nb_channels * nb_dx) in
   Log.info "reading molecules...";
   let _names, all_mols =
     A.split (A.of_list (Common.parse_all verbose cutoff dx nb_dx input_fn)) in
-  let nb_mols = A.length all_mols in
-  let _all_indexes = A.init nb_mols (fun i -> i) in
-  (* compute Gram matrix in // *)
-  let matrix = A.make_matrix nb_mols nb_mols 0.0 in
-  Log.info "Gram matrix initialization...";
-  Molenc.Gram.initialize_matrix Common.tani_dist' nprocs 1 all_mols matrix;
-  Molenc.Gram.print_corners matrix;
-  Log.info "Adding nodes and edges to graph...";
-  failwith "not implemented yet"
+  let act_max_dim = find_max_dim all_mols in
+  Log.info "max_dim: %d act_max_dim: %d" max_dim act_max_dim;
+  let _nb_mols = A.length all_mols in
+  let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
+  log_clusters clusts vars
 
 let () = main ()

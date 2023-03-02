@@ -90,6 +90,11 @@ let max_iter = 100
 let epsilon = 0.001
 
 (* FBR: write clusters out properly: lines of '^mol_name\tcID$' *)
+(* FBR: examine visualy cluster quality for some targets *)
+(* FBR: after optimal k has been determined on a dataset,
+ *      compute the average hit-rate per cluster, for clusters
+ *      with at-least one active; might relate to the difficulty
+ *      of a dataset *)
 
 (* the k-means implementation *)
 let cluster max_dim rng dist k elements =
@@ -178,6 +183,16 @@ let find_max_dim mols =
   let high_indexes = A.map Common.high_index mols in
   1 + (Int32.to_int (A.max high_indexes))
 
+(* clusters textual output: '^mol_name\tcID$' *)
+let write_clusters_out fn clusters all_names =
+  LO.with_out_file fn (fun output ->
+      L.iteri (fun i c ->
+          IntSet.iter (fun j ->
+              fprintf output "%s\tc%d\n" all_names.(j) i
+            ) c.members
+        ) clusters
+    )
+
 let main () =
   Log.(set_log_level INFO);
   Log.color_on ();
@@ -186,12 +201,14 @@ let main () =
     (eprintf "usage:\n\
               %s\n  \
               -i <filename.ph4>: input file\n  \
+              -o <filename.txt>: output file\n  \
               [-np <int>]: maximum number of CPU cores (default=1)\n  \
               [-k int]: specify the number of clusters\n  \
               [-v]: verbose/debug mode\n"
        Sys.argv.(0);
      exit 1);
   let input_fn = CLI.get_string ["-i"] args in
+  let output_fn = CLI.get_string ["-o"] args in
   let _nprocs = CLI.get_int_def ["-np"] args 1 in
   let k = CLI.get_int ["-k"] args in
   let verbose = CLI.get_set_bool ["-v"] args in
@@ -213,13 +230,14 @@ let main () =
   let nb_dx = 1 + BatFloat.round_to_int (cutoff /. dx) in
   let max_dim = 1 + (Ph4.nb_channels * nb_dx) in
   Log.info "reading molecules...";
-  let _names, all_mols =
+  let names, all_mols =
     A.split (A.of_list (Common.parse_all verbose cutoff dx nb_dx input_fn)) in
   let act_max_dim = find_max_dim all_mols in
   Log.info "max_dim: %d act_max_dim: %d" max_dim act_max_dim;
   let _nb_mols = A.length all_mols in
   let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
   log_clusters clusts vars;
+  write_clusters_out output_fn clusts names;
   let sil = avg_silhouette Common.tani_dist' clusts all_mols in
   Log.info "avg_sil: %f" sil
 

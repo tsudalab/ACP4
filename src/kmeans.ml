@@ -4,7 +4,8 @@
 
    k-means clustering and silhouette metric.
 
-   Silhouettes: A graphical aid to the interpretation and validation of cluster analysis
+   Silhouettes: A graphical aid to the interpretation and validation
+   of cluster analysis
    https://doi.org/10.1016/0377-0427(87)90125-7 *)
 
 open Printf
@@ -63,6 +64,13 @@ let cluster_variance dist all_elements cluster =
       ) cluster.members 0.0 in
   sum_d2 /. (float n)
 
+let log_clusters clusts vars =
+  let i = ref 0 in
+  L.iter2 (fun c v ->
+      Log.info "c%d: n=%d var=%f" !i (IntSet.cardinal c.members) v;
+      incr i
+    ) clusts vars
+
 let max_iter = 100
 let epsilon = 0.001
 
@@ -93,7 +101,7 @@ let cluster max_dim rng dist k elements =
   let rec loop iter clusts vars =
     if iter >= max_iter then
       (Log.info "Kmeans.cluster: max iter";
-       clusts)
+       (clusts, vars))
     else
       let centers' = A.of_list (L.map (fun clust -> clust.center) clusts) in
       (* compute assignment *)
@@ -103,12 +111,13 @@ let cluster max_dim rng dist k elements =
       (* update centers *)
       let clusts' =
         let new_centers = L.map (compute_center max_dim elements) clusters' in
-        L.map2 (fun members center -> { members; center }) clusters' new_centers in
+        L.map2 (fun members center -> { members; center })
+          clusters' new_centers in
       let vars' = L.map (cluster_variance dist elements) clusts' in
       let delta = euclid vars vars' in
       Log.info "Kmeans.cluster: delta = %f" delta;
       if delta < epsilon then
-        clusts
+        (clusts', vars')
       else
         loop (succ iter) clusts' vars' in
   (* repeat until max_iter or convergence *)

@@ -104,6 +104,7 @@ let cluster max_dim rng dist k elements =
     L.map2 (fun members center -> { members; center })
       clusters (A.to_list init_centers) in
   let vars = L.map (cluster_variance dist elements) cluster_w_centers in
+  Log.info "avg_var: %f" (L.favg vars);
   let rec loop iter clusts vars =
     if iter >= max_iter then
       (Log.info "Kmeans.cluster: max iter";
@@ -119,10 +120,10 @@ let cluster max_dim rng dist k elements =
         let new_centers = L.map (compute_center max_dim elements) clusters' in
         L.map2 (fun members center -> { members; center })
           clusters' new_centers in
-      let prev_var = L.fsum vars in
-      Log.info "total var: %f" prev_var;
+      let prev_var = L.favg vars in
       let vars' = L.map (cluster_variance dist elements) clusts' in
-      let curr_var = L.fsum vars' in
+      let curr_var = L.favg vars' in
+      Log.info "avg_var: %f" curr_var;
       let delta = prev_var -. curr_var in
       (* Log.info "Kmeans.cluster: delta = %f" delta; *)
       if abs_float delta < epsilon then

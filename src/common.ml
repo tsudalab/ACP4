@@ -67,6 +67,10 @@ type float32_array = (float, BA.float32_elt, BA.c_layout) BA1.t
 type sparse_float_fp = { indexes: int32_array;
                          values: float32_array }
 
+let high_index fp =
+  let n = BA1.dim fp.indexes in
+  BA1.unsafe_get fp.indexes (n - 1)
+
 let is_active name =
   S.starts_with name "active"
 

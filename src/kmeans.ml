@@ -21,6 +21,12 @@ module Log = Dolog.Log
 type 'a cluster = { members: IntSet.t; (* indexes of all cluster members *)
                     center: 'a } (* the cluster center (average in k-means) *)
 
+let get_center c =
+  c.center
+
+let get_members c =
+  c.members
+
 (* randomly choose [k] elements from [arr] *)
 let rand_choose rng k arr =
   let shuffled = A.copy arr in
@@ -82,8 +88,8 @@ let euclid xs ys =
       ) 0.0 xs ys in
   sqrt sum_diff2
 
-(* FBR: log out the clusters: *)
-(*      cid, members, variance, silhouette *)
+(* FBR: silhouette *)
+(* FBR: write clusters out properly *)
 
 (* the k-means implementation *)
 let cluster max_dim rng dist k elements =
@@ -94,16 +100,16 @@ let cluster max_dim rng dist k elements =
     let assignment = A.map (assign_to_cluster dist init_centers) elements in
     extract_clusters assignment in
   (* compute centers *)
-  let centers = L.map (compute_center max_dim elements) clusters in
   let cluster_w_centers =
-    L.map2 (fun members center -> { members; center }) clusters centers in
-  let variances = L.map (cluster_variance dist elements) cluster_w_centers in
+    L.map2 (fun members center -> { members; center })
+      clusters (A.to_list init_centers) in
+  let vars = L.map (cluster_variance dist elements) cluster_w_centers in
   let rec loop iter clusts vars =
     if iter >= max_iter then
       (Log.info "Kmeans.cluster: max iter";
        (clusts, vars))
     else
-      let centers' = A.of_list (L.map (fun clust -> clust.center) clusts) in
+      let centers' = A.of_list (L.map get_center clusts) in
       (* compute assignment *)
       let clusters' =
         let assignment = A.map (assign_to_cluster dist centers') elements in
@@ -113,15 +119,18 @@ let cluster max_dim rng dist k elements =
         let new_centers = L.map (compute_center max_dim elements) clusters' in
         L.map2 (fun members center -> { members; center })
           clusters' new_centers in
+      let prev_var = L.fsum vars in
+      Log.info "total var: %f" prev_var;
       let vars' = L.map (cluster_variance dist elements) clusts' in
-      let delta = euclid vars vars' in
-      Log.info "Kmeans.cluster: delta = %f" delta;
-      if delta < epsilon then
+      let curr_var = L.fsum vars' in
+      let delta = prev_var -. curr_var in
+      (* Log.info "Kmeans.cluster: delta = %f" delta; *)
+      if abs_float delta < epsilon then
         (clusts', vars')
       else
         loop (succ iter) clusts' vars' in
   (* repeat until max_iter or convergence *)
-  loop 0 cluster_w_centers variances
+  loop 0 cluster_w_centers vars
 
 let find_max_dim mols =
   let high_indexes = A.map Common.high_index mols in

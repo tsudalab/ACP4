@@ -33,20 +33,26 @@ let rand_choose rng k arr =
   A.shuffle ~state:rng shuffled;
   A.left shuffled k
 
-(* return cluster id for x (first nearest center's index) *)
-let assign_to_cluster dist centers x =
-  let mini = ref infinity in
-  let j = ref (-1) in
+let rand_select rng arr =
+  let n = A.length arr in
+  let i = Random.State.int rng n in
+  arr.(i)
+
+(* return cluster id for x (nearest center's index) *)
+let assign_to_cluster rng dist centers x =
   let distances = A.map (dist x) centers in
+  let mini = A.min distances in
+  let res = ref [] in
   A.iteri (fun i d ->
-      if d < !mini then
-        (j := i;
-         mini := d)
-      else
-        if d = !mini then
-          Log.warn "Kmeans.assign_to_cluster: equidistant"
+      if d = mini then
+        res := i :: !res
     ) distances;
-  !j
+  let candidates = A.of_list !res in
+  if A.length candidates > 1 then
+    (Log.warn "Kmeans.assign_to_cluster: equidistant";
+     rand_select rng candidates)
+  else
+    candidates.(0)
 
 (* from an assignment (a mapping from elt. index to cluster_id), create
    a list of clusters *)
@@ -96,7 +102,8 @@ let cluster max_dim rng dist k elements =
   let init_centers = rand_choose rng k elements in
   (* compute initial assignment *)
   let clusters =
-    let assignment = A.map (assign_to_cluster dist init_centers) elements in
+    let assignment =
+      A.map (assign_to_cluster rng dist init_centers) elements in
     extract_clusters assignment in
   let cluster_w_centers =
     L.map2 (fun members center -> { members; center })
@@ -111,7 +118,8 @@ let cluster max_dim rng dist k elements =
       let centers' = A.of_list (L.map get_center clusts) in
       (* compute assignment *)
       let clusters' =
-        let assignment = A.map (assign_to_cluster dist centers') elements in
+        let assignment =
+          A.map (assign_to_cluster rng dist centers') elements in
         extract_clusters assignment in
       (* update centers *)
       let clusts' =

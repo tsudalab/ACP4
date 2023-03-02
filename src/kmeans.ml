@@ -42,6 +42,9 @@ let assign_to_cluster dist centers x =
       if d < !mini then
         (j := i;
          mini := d)
+      else
+        if d = !mini then
+          Log.warn "Kmeans.assign_to_cluster: equidistant"
     ) distances;
   !j
 

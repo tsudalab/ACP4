@@ -89,7 +89,6 @@ let log_clusters clusts vars =
 let max_iter = 100
 let epsilon = 0.001
 
-(* change the distance to cached *)
 (* automate search for optimal k *)
 (* implement k-range: start:step:stop *)
 
@@ -148,18 +147,17 @@ let cluster max_dim rng dist k elements =
   loop 0 cluster_w_centers vars
 
 (* average distance of elt_i to all _other_ cluster elements *)
-let avg_dist dist all_elements cluster i =
+let avg_dist dist cluster i =
   let res = ref [] in
-  let elt_i = all_elements.(i) in
   IntSet.iter (fun j ->
       if i <> j then
-        let d = dist elt_i all_elements.(j) in
+        let d = dist i j in
         res := d :: !res
     ) cluster.members;
   L.favg !res
 
 (* the silhouette metric *)
-let silhouette dist clusters all_elements i =
+let silhouette dist clusters i =
   let my_cluster', other_clusters =
     L.partition (fun c -> IntSet.mem i c.members) clusters in
   assert(L.length my_cluster' = 1);
@@ -168,18 +166,18 @@ let silhouette dist clusters all_elements i =
     0.0 (* from the definition *)
   else
     (* a: average dist to its own cluster members *)
-    let a = avg_dist dist all_elements my_cluster i in
+    let a = avg_dist dist my_cluster i in
     (* b: min(avg dist to other clusters) *)
     let avg_dists =
       L.map (fun c ->
-          avg_dist dist all_elements c i
+          avg_dist dist c i
         ) other_clusters in
-    let b = L.min avg_dists in 
+    let b = L.min avg_dists in
     (b -. a) /. (max a b)
 
-let avg_silhouette dist clusters all_elements =
-  let n = A.length all_elements in
-  let silhouettes = A.init n (silhouette dist clusters all_elements) in
+let avg_silhouette dist clusters =
+  let n = L.sum (L.map (fun c -> IntSet.cardinal c.members) clusters) in
+  let silhouettes = A.init n (silhouette dist clusters) in
   A.favg silhouettes
 
 let find_max_dim mols =
@@ -196,7 +194,7 @@ let write_clusters_out fn clusters all_names =
         ) clusters
     )
 
-let tani_cached i j all_mols mtx =
+let tani_cached all_mols mtx i j =
   let d = mtx.(i).(j) in
   if d > -1.0 then
     d (* already in cache *)
@@ -246,13 +244,15 @@ let main () =
   Log.info "reading molecules...";
   let names, all_mols =
     A.split (A.of_list (Common.parse_all verbose cutoff dx nb_dx input_fn)) in
+  let nb_mols = A.length all_mols in
+  let dist_cache = A.make_matrix nb_mols nb_mols (-1.0) in
+  let dist = tani_cached all_mols dist_cache in
   let act_max_dim = find_max_dim all_mols in
   Log.info "max_dim: %d act_max_dim: %d" max_dim act_max_dim;
-  let _nb_mols = A.length all_mols in
   let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
   log_clusters clusts vars;
   write_clusters_out output_fn clusts names;
-  let sil = avg_silhouette Common.tani_dist' clusts all_mols in
+  let sil = avg_silhouette dist clusts in
   Log.info "avg_sil: %f" sil
 
 let () = main ()

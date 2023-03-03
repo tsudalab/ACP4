@@ -209,6 +209,17 @@ let tani_cached all_mols mtx i j =
     mtx.(j).(i) <- d';
     d'
 
+let parse_krange_str s =
+  let start, step, stop =
+    Scanf.sscanf s "%d:%d:%d" (fun a b c -> (a, b, c)) in
+  let res = ref [] in
+  let curr = ref start in
+  while !curr < stop do
+    res := !curr :: !res;
+    curr := !curr + step
+  done;
+  L.rev !res
+
 let main () =
   Log.(set_log_level INFO);
   Log.color_on ();
@@ -225,10 +236,10 @@ let main () =
        Sys.argv.(0);
      exit 1);
   let input_fn = CLI.get_string ["-i"] args in
-  let output_fn = CLI.get_string ["-o"] args in
+  let _output_fn = CLI.get_string ["-o"] args in
   let _nprocs = CLI.get_int_def ["-np"] args 1 in
-  let k = CLI.get_int ["-k"] args in
-  let _k_range_str = CLI.get_string_opt ["--ks"] args in
+  let k' = CLI.get_int_opt ["-k"] args in
+  let maybe_k_range = CLI.get_string_opt ["--ks"] args in
   let verbose = CLI.get_set_bool ["-v"] args in
   let binding_site_mode = CLI.get_set_bool ["--BS"] args in
   let cutoff =
@@ -245,20 +256,28 @@ let main () =
     | None -> Random.State.make_self_init ()
     | Some seed -> Random.State.make [|seed|] in
   CLI.finalize (); (* ------------------------------------------------------ *)
+  let k_range = match maybe_k_range with
+    | Some s -> parse_krange_str s
+    | None ->
+      match k' with
+      | Some k -> [k]
+      | None -> failwith "requires -k OR --ks" in
   let nb_dx = 1 + BatFloat.round_to_int (cutoff /. dx) in
   let max_dim = 1 + (Ph4.nb_channels * nb_dx) in
   Log.info "reading molecules...";
-  let names, all_mols =
+  let _names, all_mols =
     A.split (A.of_list (Common.parse_all verbose cutoff dx nb_dx input_fn)) in
   let nb_mols = A.length all_mols in
   let dist_cache = A.make_matrix nb_mols nb_mols (-1.0) in
   let dist = tani_cached all_mols dist_cache in
   let act_max_dim = find_max_dim all_mols in
   Log.info "max_dim: %d act_max_dim: %d" max_dim act_max_dim;
-  let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
-  log_clusters clusts vars;
-  write_clusters_out output_fn clusts names;
-  let sil = avg_silhouette dist clusts in
-  Log.info "avg_sil: %f" sil
+  L.iter (fun k ->
+      let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
+      log_clusters clusts vars;
+      (* write_clusters_out output_fn clusts names; *)
+      let sil = avg_silhouette dist clusts in
+      Log.info "k: %d avg_sil: %f" k sil
+    ) k_range
 
 let () = main ()

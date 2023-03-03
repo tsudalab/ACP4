@@ -273,11 +273,13 @@ let main () =
   let act_max_dim = find_max_dim all_mols in
   Log.info "max_dim: %d act_max_dim: %d" max_dim act_max_dim;
   L.iter (fun k ->
-      let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
-      log_clusters clusts vars;
-      (* write_clusters_out output_fn clusts names; *)
-      let sil = avg_silhouette dist clusts in
-      Log.info "k: %d avg_sil: %f" k sil
+      try
+        let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
+        log_clusters clusts vars;
+        (* write_clusters_out output_fn clusts names; *)
+        let sil = avg_silhouette dist clusts in
+        Log.info "k: %d avg_sil: %f" k sil
+      with _exn -> Log.warn "exn"
     ) k_range
 
 let () = main ()

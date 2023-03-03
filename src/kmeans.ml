@@ -89,7 +89,10 @@ let log_clusters clusts vars =
 let max_iter = 100
 let epsilon = 0.001
 
-(* FBR: write clusters out properly: lines of '^mol_name\tcID$' *)
+(* change the distance to cached *)
+(* automate search for optimal k *)
+(* implement k-range: start:step:stop *)
+
 (* FBR: examine visualy cluster quality for some targets *)
 (* FBR: after optimal k has been determined on a dataset,
  *      compute the average hit-rate per cluster, for clusters
@@ -192,6 +195,17 @@ let write_clusters_out fn clusters all_names =
             ) c.members
         ) clusters
     )
+
+let tani_cached i j all_mols mtx =
+  let d = mtx.(i).(j) in
+  if d > -1.0 then
+    d (* already in cache *)
+  else
+    (* init cache *)
+    let d' = Common.tani_dist' all_mols.(i) all_mols.(j) in
+    mtx.(i).(j) <- d';
+    mtx.(j).(i) <- d';
+    d'
 
 let main () =
   Log.(set_log_level INFO);

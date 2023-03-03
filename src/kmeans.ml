@@ -175,9 +175,10 @@ let silhouette dist clusters i =
     let b = L.min avg_dists in
     (b -. a) /. (max a b)
 
-let avg_silhouette dist clusters =
+let avg_silhouette nprocs dist clusters =
   let n = L.sum (L.map (fun c -> IntSet.cardinal c.members) clusters) in
-  let silhouettes = A.init n (silhouette dist clusters) in
+  let xs = A.init n (fun i -> i) in
+  let silhouettes = Parany.Parmap.array_parmap nprocs (silhouette dist clusters) 0. xs in
   A.favg silhouettes
 
 let find_max_dim mols =
@@ -237,7 +238,7 @@ let main () =
      exit 1);
   let input_fn = CLI.get_string ["-i"] args in
   let output_fn = CLI.get_string ["-o"] args in
-  let _nprocs = CLI.get_int_def ["-np"] args 1 in
+  let nprocs = CLI.get_int_def ["-np"] args 1 in
   let k' = CLI.get_int_opt ["-k"] args in
   let maybe_k_range = CLI.get_string_opt ["--ks"] args in
   let verbose = CLI.get_set_bool ["-v"] args in
@@ -280,7 +281,7 @@ let main () =
       try
         let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
         (* log_clusters clusts vars; *)
-        let sil = avg_silhouette dist clusts in
+        let sil = avg_silhouette nprocs dist clusts in
         Log.info "k: %d avg_sil: %f" k sil;
         if sil > !best_sil then
           begin

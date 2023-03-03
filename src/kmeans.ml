@@ -194,6 +194,10 @@ let write_clusters_out fn clusters all_names =
         ) clusters
     )
 
+(* useful only for silhouette metric calculation; since *)
+(* during clustering the distance of interest is to *)
+(* the cluster center only (which is not a point from *)
+(* the dataset) *)
 let tani_cached all_mols mtx i j =
   let d = mtx.(i).(j) in
   if d > -1.0 then
@@ -216,6 +220,7 @@ let main () =
               -o <filename.txt>: output file\n  \
               [-np <int>]: maximum number of CPU cores (default=1)\n  \
               [-k int]: specify the number of clusters\n  \
+              [--ks 'start:step:stop']: scan range for best k\n  \
               [-v]: verbose/debug mode\n"
        Sys.argv.(0);
      exit 1);
@@ -223,6 +228,7 @@ let main () =
   let output_fn = CLI.get_string ["-o"] args in
   let _nprocs = CLI.get_int_def ["-np"] args 1 in
   let k = CLI.get_int ["-k"] args in
+  let _k_range_str = CLI.get_string_opt ["--ks"] args in
   let verbose = CLI.get_set_bool ["-v"] args in
   let binding_site_mode = CLI.get_set_bool ["--BS"] args in
   let cutoff =

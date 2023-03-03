@@ -82,7 +82,7 @@ let cluster_variance dist all_elements cluster =
 let log_clusters clusts vars =
   let i = ref 0 in
   L.iter2 (fun c v ->
-      Log.info "c%d: n=%d var=%f" !i (IntSet.cardinal c.members) v;
+      Log.info "c%d: n=%d var=%.3f" !i (IntSet.cardinal c.members) v;
       incr i
     ) clusts vars
 
@@ -236,7 +236,7 @@ let main () =
        Sys.argv.(0);
      exit 1);
   let input_fn = CLI.get_string ["-i"] args in
-  let _output_fn = CLI.get_string ["-o"] args in
+  let output_fn = CLI.get_string ["-o"] args in
   let _nprocs = CLI.get_int_def ["-np"] args 1 in
   let k' = CLI.get_int_opt ["-k"] args in
   let maybe_k_range = CLI.get_string_opt ["--ks"] args in
@@ -265,21 +265,34 @@ let main () =
   let nb_dx = 1 + BatFloat.round_to_int (cutoff /. dx) in
   let max_dim = 1 + (Ph4.nb_channels * nb_dx) in
   Log.info "reading molecules...";
-  let _names, all_mols =
+  let names, all_mols =
     A.split (A.of_list (Common.parse_all verbose cutoff dx nb_dx input_fn)) in
   let nb_mols = A.length all_mols in
   let dist_cache = A.make_matrix nb_mols nb_mols (-1.0) in
   let dist = tani_cached all_mols dist_cache in
   let act_max_dim = find_max_dim all_mols in
   Log.info "max_dim: %d act_max_dim: %d" max_dim act_max_dim;
+  let best_sil = ref (-1.0) in
+  let best_k = ref 0 in
+  let best_clusters = ref [] in
+  let best_vars = ref [] in
   L.iter (fun k ->
       try
         let clusts, vars = cluster act_max_dim rng Common.tani_dist' k all_mols in
-        log_clusters clusts vars;
-        (* write_clusters_out output_fn clusts names; *)
+        (* log_clusters clusts vars; *)
         let sil = avg_silhouette dist clusts in
-        Log.info "k: %d avg_sil: %f" k sil
+        Log.info "k: %d avg_sil: %f" k sil;
+        if sil > !best_sil then
+          begin
+            best_sil := sil;
+            best_k := k;
+            best_clusters := clusts;
+            best_vars := vars
+          end
       with _exn -> Log.warn "exn"
-    ) k_range
+    ) k_range;
+  Log.info "best_k: %d best_sil: %.2f" !best_k !best_sil;
+  log_clusters !best_clusters !best_vars;
+  write_clusters_out output_fn !best_clusters names
 
 let () = main ()

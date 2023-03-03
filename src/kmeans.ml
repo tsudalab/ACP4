@@ -233,6 +233,7 @@ let main () =
               [-np <int>]: maximum number of CPU cores (default=1)\n  \
               [-k int]: specify the number of clusters\n  \
               [--ks 'start:step:stop']: scan range for best k\n  \
+              [--trim <int>]: trim dataset\n  \
               [-v]: verbose/debug mode\n"
        Sys.argv.(0);
      exit 1);
@@ -241,6 +242,7 @@ let main () =
   let nprocs = CLI.get_int_def ["-np"] args 1 in
   let k' = CLI.get_int_opt ["-k"] args in
   let maybe_k_range = CLI.get_string_opt ["--ks"] args in
+  let maybe_trim = CLI.get_int_opt ["--trim"] args in
   let verbose = CLI.get_set_bool ["-v"] args in
   let binding_site_mode = CLI.get_set_bool ["--BS"] args in
   let cutoff =
@@ -267,7 +269,11 @@ let main () =
   let max_dim = 1 + (Ph4.nb_channels * nb_dx) in
   Log.info "reading molecules...";
   let names, all_mols =
-    A.split (A.of_list (Common.parse_all verbose cutoff dx nb_dx input_fn)) in
+    let name_mols' = A.of_list (Common.parse_all verbose cutoff dx nb_dx input_fn) in
+    let name_mols = match maybe_trim with
+      | Some trim_to -> A.left name_mols' trim_to
+      | None -> name_mols' in
+    A.split name_mols in
   let nb_mols = A.length all_mols in
   let dist_cache = A.make_matrix nb_mols nb_mols (-1.0) in
   let dist = tani_cached all_mols dist_cache in

@@ -17,6 +17,7 @@ module IntSet = BatSet.Int
 module L = BatList
 module LO = Line_oriented
 module Log = Dolog.Log
+module S = BatString
 
 type 'a cluster = { members: IntSet.t; (* indexes of all cluster members *)
                     center: 'a } (* the cluster center (average in k-means) *)
@@ -88,9 +89,6 @@ let log_clusters clusts vars =
 
 let max_iter = 100
 let epsilon = 0.001
-
-(* automate search for optimal k *)
-(* implement k-range: start:step:stop *)
 
 (* FBR: examine visualy cluster quality for some targets *)
 (* FBR: after optimal k has been determined on a dataset,
@@ -211,15 +209,23 @@ let tani_cached all_mols mtx i j =
     d'
 
 let parse_krange_str s =
-  let start, step, stop =
-    Scanf.sscanf s "%d:%d:%d" (fun a b c -> (a, b, c)) in
-  let res = ref [] in
-  let curr = ref start in
-  while !curr < stop do
-    res := !curr :: !res;
-    curr := !curr + step
-  done;
-  L.rev !res
+  if S.contains s ':' then
+    let start, step, stop =
+      Scanf.sscanf s "%d:%d:%d" (fun a b c -> (a, b, c)) in
+    let res = ref [] in
+    let curr = ref start in
+    while !curr < stop do
+      res := !curr :: !res;
+      curr := !curr + step
+    done;
+    L.rev !res
+  else
+  if S.contains s ',' then
+    let xs = S.split_on_string s ~by:"," in
+    L.map int_of_string xs
+  else
+    let () = Log.fatal "Kmeans.parse_krange_str: cannot parse: %s" s in
+    exit 1
 
 let main () =
   Log.(set_log_level INFO);
@@ -232,7 +238,7 @@ let main () =
               -o <filename.txt>: output file\n  \
               [-np <int>]: maximum number of CPU cores (default=1)\n  \
               [-k int]: specify the number of clusters\n  \
-              [--ks 'start:step:stop']: scan range for best k\n  \
+              [--ks '{start:step:stop|x,y,z,...}']: scan range for best k\n  \
               [--trim <int>]: trim dataset\n  \
               [-v]: verbose/debug mode\n"
        Sys.argv.(0);

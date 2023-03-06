@@ -20,6 +20,7 @@ module IntSet = BatSet.Int
 module L = BatList
 module LO = Line_oriented
 module Log = Dolog.Log
+module S = BatString
 
 (* Undirected graph with integer labels on vertices and float labels (weights)
    on edges *)
@@ -68,6 +69,12 @@ let graph_to_dot fn g =
       fprintf out "}\n";
     )
 
+(* "1oq5_CEL_1_protein" -> "1oq5_1/ligand.png" *)
+let png_name_of_ligand s =
+  match S.split_on_string s ~by:"_" with
+  | [pdb; _lig; num; _protein] -> sprintf "%s_%s/ligand.png" pdb num
+  | _ -> "no_image.png"
+
 (* write the MST edges to file in dot format *)
 let mst_edges_to_dot fn names edges =
   (* list connected nodes *)
@@ -91,10 +98,11 @@ let mst_edges_to_dot fn names edges =
                0 <= green && green <= 255 &&
                0 <= blue && blue <= 255);
         if IntSet.mem i !nodes_set then
-          let name = names.(i) in          
+          let name' = names.(i) in
+          let name = png_name_of_ligand name' in
           fprintf out "\"%d\" [label=\"\" style=\"filled\" \
                        color=\"#%02x%02x%02x\" \
-                       image=\"pix/%s_lig.png\"]\n"
+                       image=\"%s\"]\n"
             i red green blue name
       done;
       L.iter (fun e ->
